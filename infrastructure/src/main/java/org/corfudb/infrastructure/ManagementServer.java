@@ -368,11 +368,11 @@ public class ManagementServer extends AbstractServer {
         failureDetectorPolicy.executePolicy(latestLayout, corfuRuntime);
 
         // Get the server status from the policy and check for failures.
-        Map map = failureDetectorPolicy.getServerStatus();
+        Map pollingFailuresDetected = failureDetectorPolicy.getServerStatus();
 
         try {
-            if (!map.isEmpty()) {
-                log.info("Failures detected. Failed nodes : {}", map.toString());
+            if (!pollingFailuresDetected.isEmpty()) {
+                log.info("Failures detected. Failed nodes : {}", pollingFailuresDetected.toString());
                 // If map not empty, failures present. Trigger handler.
                 // Check if handler has been initiated.
                 if (!startFailureHandler) {
@@ -382,14 +382,14 @@ public class ManagementServer extends AbstractServer {
                 // Check if this failure has already been recognized.
                 if (!latestLayout.getUnresponsiveServers().isEmpty()) {
                     for (String server : latestLayout.getUnresponsiveServers()) {
-                        if (!map.containsKey(server)) {
-                            corfuRuntime.getRouter(getLocalEndpoint()).getClient(ManagementClient.class).handleFailure(map).get();
+                        if (!pollingFailuresDetected.containsKey(server)) {
+                            corfuRuntime.getRouter(getLocalEndpoint()).getClient(ManagementClient.class).handleFailure(pollingFailuresDetected).get();
                             return;
                         }
                     }
                     log.debug("Failure already taken care of.");
                 } else {
-                    corfuRuntime.getRouter(getLocalEndpoint()).getClient(ManagementClient.class).handleFailure(map).get();
+                    corfuRuntime.getRouter(getLocalEndpoint()).getClient(ManagementClient.class).handleFailure(pollingFailuresDetected).get();
                 }
             } else {
                 // We can safely mark the unresponsive server as normal now.
