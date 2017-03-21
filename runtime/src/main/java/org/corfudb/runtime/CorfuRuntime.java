@@ -1,6 +1,7 @@
 package org.corfudb.runtime;
 
 import com.codahale.metrics.MetricRegistry;
+import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
@@ -31,6 +32,21 @@ import java.util.stream.Collectors;
 @Accessors(chain = true)
 public class CorfuRuntime {
 
+    @Data
+    public static class CorfuRuntimeParameters {
+
+        /** True, if undo logging is disabled. */
+        boolean undoDisabled = false;
+
+        /** True, if optimistic undo logging is disabled. */
+        boolean optimisticUndoDisabled = false;
+
+        /** Number of times to attempt to read before hole filling. */
+        int holeFillRetry = 10;
+    }
+
+    @Getter
+    private final CorfuRuntimeParameters parameters = new CorfuRuntimeParameters();
     /**
      * A view of the layout service in the Corfu server instance.
      */
