@@ -2,14 +2,14 @@ package org.corfudb.runtime.object.transactions;
 
 import lombok.extern.slf4j.Slf4j;
 import org.corfudb.protocols.logprotocol.MultiObjectSMREntry;
+import org.corfudb.protocols.logprotocol.SMREntry;
 import org.corfudb.protocols.wireprotocol.TxResolutionInfo;
 import org.corfudb.runtime.exceptions.TransactionAbortedException;
+import org.corfudb.runtime.object.ICoalescableObject;
 import org.corfudb.runtime.object.ICorfuSMRProxyInternal;
+import org.corfudb.util.serializer.ISerializer;
 
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 import static org.corfudb.runtime.view.ObjectsView.TRANSACTION_STREAM_ID;
 
@@ -63,6 +63,30 @@ public class WriteAfterWriteTransactionalContext
             affectedStreams.add(TRANSACTION_STREAM_ID);
         }
 
+        MultiObjectSMREntry entry = collectWriteSetEntries();
+
+        if (!builder.getRuntime().getParameters().isCoalesceDisabled()) {
+            // for each modified proxy, attempt to condense the write sets
+            writeProxies.stream()
+                    .forEach(x -> {
+                        if (writeSet.get(x.getStreamID()).getValue().size() >= 2) {
+                            ISerializer serializer = writeSet.get(x.getStreamID()).getValue().get(0).getSerializerType();
+                            if (x.getUnderlyingObject().getWrapperObject() instanceof ICoalescableObject) {
+                                entry.getEntryMap().get(x.getStreamID()).setSMRUpdates((List)
+                                        ((ICoalescableObject) x.getUnderlyingObject().getWrapperObject())
+                                                .coalesceUpdates((List) writeSet.get(x.getStreamID()).getValue(),
+                                                        (method, args, isUndoable, undoRecord) -> {
+                                                            SMREntry e = new SMREntry(method, args, serializer);
+                                                            if (isUndoable) {
+                                                                e.setUndoRecord(undoRecord);
+                                                            }
+                                                            return e;
+                                                        }));
+                            }
+                        }
+                    });
+        }
+
         // Now we obtain a conditional address from the sequencer.
         // This step currently happens all at once, and we get an
         // address of -1L if it is rejected.
@@ -73,7 +97,7 @@ public class WriteAfterWriteTransactionalContext
                         affectedStreams,
 
                         // a MultiObjectSMREntry that contains the update(s) to objects
-                        collectWriteSetEntries(),
+                        entry,
 
                         // nothing to do after successful acquisition and after deacquisition
                         t->true, t->true,
